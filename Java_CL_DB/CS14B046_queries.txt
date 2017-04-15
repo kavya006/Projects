@@ -1,0 +1,109 @@
+#######################################Query 1: #############################################
+#                                                                                           #
+#                                                                                           #
+#     Find the medals won by each country participating in tournament 1.                    #
+#                                                                                           #
+#                                                                                           #
+#############################################################################################
+
+create or replace view matchPoints  as
+  select result as teamNo, count(result) as medals
+  from matchTable
+  where tournamentNo = 1
+  group by result;
+
+  select countryId, sum(medals) as medalsWon 
+  from country as c, team as t, matchPoints as mp
+  where t.teamId = mp.teamNo 
+        and c.countryId = t.countryNo
+  group by c.countryId;
+
+
+################################ Query 2: ############################################
+#                                                                                    #
+#                                                                                    #
+#     Find the details of players born in October or are atmost 20years              #
+#     old who won atleast one match in tournament 2.                                 #
+#                                                                                    #
+#                                                                                    #
+######################################################################################
+
+create or replace view playerAge as
+  select * , CAST(TIMESTAMPDIFF(YEAR, birthDate, CURDATE()) as unsigned) as age 
+  from player;
+
+  select playerId, birthDate, age, teamNo  
+  from playerAge  
+  where teamNo = ANY(select result from matchTable where tournamentNo = 2) 
+        and (age <= 20 or MONTH(birthDate) = 6)
+  order by age;
+
+######################################### Query 3: ##########################################
+#                                                                                           #
+#                                                                                           #
+#     Find the teams of the country 1 which did not win any match in the tournament 1       #
+#                                                                                           #
+#                                                                                           #
+#############################################################################################
+
+select teamId, teamName 
+from team 
+where countryNo = 1 
+      and teamId NOT IN 
+                        ( select result 
+                          from matchTable 
+                          where tournamentNo = 1
+                        );
+                        
+#################################### Query 4: ###############################################
+#                                                                                           #
+#                                                                                           #
+#     Find the team details of the teams which played for atleast more that 2 hr            #
+#     in any of their matches in both the tournament.                                       #
+#                                                                                           #
+#                                                                                           #
+#############################################################################################
+
+select teamId, teamName , countryNo
+from team 
+where EXISTS (
+  (
+    select teamId as teamNo 
+    from matchTable 
+    where TIMESTAMPDIFF(HOUR, startTime, endTime) >= 2 
+          and (team1 = teamId or team2 = teamId)
+          and tournamentNo = 1
+          and teamId IN (
+            select teamId as teamNo 
+            from matchTable 
+            where TIMESTAMPDIFF(HOUR, startTime, endTime) >= 2 
+                  and (team1 = teamId or team2 = teamId)
+                  and tournamentNo = 2
+          )
+  )
+);
+
+###################################### Query 5: ######################################
+#                                                                                    #
+#                                                                                    #
+#     Find the details of eldest player playing for each sport.                      #
+#                                                                                    #
+#                                                                                    #
+######################################################################################
+
+create or replace view playerAge as
+  select * , 
+    CAST(TIMESTAMPDIFF(YEAR, birthDate, CURDATE()) as unsigned) as age 
+  from player;
+
+create or replace view gAge as 
+  select t.sportNo as sportNo, max(p1.age) as age
+      from playerAge as p1 inner join team as t 
+        on p1.teamNo = t.teamId
+      group by t.sportNo;
+
+  select p2.* ,t.sportNo 
+  from playerAge as p2 , team as t , gAge as ga
+  where p2.age = ga.age 
+        and p2.teamNo = t.teamId
+        and t.sportNo= ga.sportNo
